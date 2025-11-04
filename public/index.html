@@ -54,8 +54,39 @@
           <span class="emoji">🎯</span>
         </div>
       </div>
+      <button class="camera-btn" id="cameraBtn" title="Take a photo 📸">📸</button>
       <input type="text" id="messageInput" placeholder="Type a message... (try /help for commands!)" maxlength="500">
       <button id="sendButton">Send 🚀</button>
+    </div>
+
+    <!-- Camera Modal -->
+    <div class="camera-modal" id="cameraModal">
+      <div class="camera-modal-content">
+        <div class="camera-header">
+          <h3>📸 Take a Photo</h3>
+          <button class="close-camera" id="closeCamera">✕</button>
+        </div>
+        <div class="camera-preview-container">
+          <video id="cameraVideo" autoplay playsinline></video>
+          <canvas id="cameraCanvas"></canvas>
+          <img id="previewImage" style="display: none;">
+        </div>
+        <div class="camera-controls">
+          <div class="filter-buttons">
+            <button class="filter-btn active" data-filter="none">Normal</button>
+            <button class="filter-btn" data-filter="neon">Neon 🌈</button>
+            <button class="filter-btn" data-filter="vintage">Vintage 📷</button>
+            <button class="filter-btn" data-filter="grayscale">B&W ⚫</button>
+            <button class="filter-btn" data-filter="mirror">Mirror 🔄</button>
+            <button class="filter-btn" data-filter="sepia">Sepia 🎨</button>
+          </div>
+          <div class="camera-actions">
+            <button class="capture-btn" id="captureBtn">📷 Capture</button>
+            <button class="retake-btn" id="retakeBtn" style="display: none;">🔄 Retake</button>
+            <button class="send-photo-btn" id="sendPhotoBtn" style="display: none;">Send Photo 🚀</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="users-sidebar" id="usersSidebar">

@@ -1,6 +1,9 @@
 const socket = io();
 let username = '';
 let typingTimeout;
+let currentStream = null;
+let currentFilter = 'none';
+let capturedImage = null;
 
 // DOM elements
 const usernameModal = document.getElementById('usernameModal');
@@ -14,6 +17,18 @@ const emojiBtn = document.getElementById('emojiBtn');
 const emojiPicker = document.getElementById('emojiPicker');
 const usersList = document.getElementById('usersList');
 const userCount = document.getElementById('userCount');
+
+// Camera elements
+const cameraBtn = document.getElementById('cameraBtn');
+const cameraModal = document.getElementById('cameraModal');
+const closeCamera = document.getElementById('closeCamera');
+const cameraVideo = document.getElementById('cameraVideo');
+const cameraCanvas = document.getElementById('cameraCanvas');
+const previewImage = document.getElementById('previewImage');
+const captureBtn = document.getElementById('captureBtn');
+const retakeBtn = document.getElementById('retakeBtn');
+const sendPhotoBtn = document.getElementById('sendPhotoBtn');
+const filterButtons = document.querySelectorAll('.filter-btn');
 
 // Join chat
 joinButton.addEventListener('click', () => {
@@ -75,13 +90,215 @@ document.addEventListener('click', (e) => {
   }
 });
 
+// Camera functionality
+cameraBtn.addEventListener('click', openCamera);
+closeCamera.addEventListener('click', closeCameraModal);
+
+function openCamera() {
+  cameraModal.classList.add('show');
+  navigator.mediaDevices.getUserMedia({ 
+    video: { 
+      facingMode: 'user',
+      width: { ideal: 640 },
+      height: { ideal: 480 }
+    } 
+  })
+  .then(stream => {
+    currentStream = stream;
+    cameraVideo.srcObject = stream;
+    cameraVideo.style.display = 'block';
+    previewImage.style.display = 'none';
+    captureBtn.style.display = 'block';
+    retakeBtn.style.display = 'none';
+    sendPhotoBtn.style.display = 'none';
+  })
+  .catch(err => {
+    console.error('Error accessing camera:', err);
+    alert('Unable to access camera. Please allow camera permissions.');
+    closeCameraModal();
+  });
+}
+
+function closeCameraModal() {
+  cameraModal.classList.remove('show');
+  if (currentStream) {
+    currentStream.getTracks().forEach(track => track.stop());
+    currentStream = null;
+  }
+  cameraVideo.srcObject = null;
+  capturedImage = null;
+  currentFilter = 'none';
+  filterButtons.forEach(btn => {
+    if (btn.dataset.filter === 'none') {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+}
+
+// Filter buttons
+filterButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    filterButtons.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentFilter = btn.dataset.filter;
+    applyFilter();
+  });
+});
+
+function applyFilter() {
+  if (!capturedImage) return;
+  
+  const canvas = cameraCanvas;
+  const ctx = canvas.getContext('2d');
+  const img = new Image();
+  
+  img.onload = () => {
+    canvas.width = img.width;
+    canvas.height = img.height;
+    
+    // Handle mirror filter differently
+    if (currentFilter === 'mirror') {
+      ctx.save();
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(img, 0, 0);
+      ctx.restore();
+      previewImage.src = canvas.toDataURL('image/jpeg', 0.8);
+      return;
+    }
+    
+    // For normal filter, just show original
+    if (currentFilter === 'none') {
+      previewImage.src = capturedImage;
+      return;
+    }
+    
+    ctx.drawImage(img, 0, 0);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    
+    switch(currentFilter) {
+      case 'neon':
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          const brightness = (r + g + b) / 3;
+          data[i] = Math.min(255, brightness * 2);
+          data[i + 1] = Math.min(255, brightness * 1.5);
+          data[i + 2] = Math.min(255, brightness * 3);
+        }
+        break;
+      case 'vintage':
+        for (let i = 0; i < data.length; i += 4) {
+          data[i] = Math.min(255, data[i] * 1.1);
+          data[i + 1] = Math.min(255, data[i + 1] * 0.95);
+          data[i + 2] = Math.min(255, data[i + 2] * 0.85);
+          data[i + 3] *= 0.9;
+        }
+        break;
+      case 'grayscale':
+        for (let i = 0; i < data.length; i += 4) {
+          const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+          data[i] = gray;
+          data[i + 1] = gray;
+          data[i + 2] = gray;
+        }
+        break;
+      case 'sepia':
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          data[i] = Math.min(255, (r * 0.393) + (g * 0.769) + (b * 0.189));
+          data[i + 1] = Math.min(255, (r * 0.349) + (g * 0.686) + (b * 0.168));
+          data[i + 2] = Math.min(255, (r * 0.272) + (g * 0.534) + (b * 0.131));
+        }
+        break;
+    }
+    
+    ctx.putImageData(imageData, 0, 0);
+    previewImage.src = canvas.toDataURL('image/jpeg', 0.8);
+  };
+  
+  img.src = capturedImage;
+}
+
+// Capture photo
+captureBtn.addEventListener('click', () => {
+  const canvas = cameraCanvas;
+  const ctx = canvas.getContext('2d');
+  canvas.width = cameraVideo.videoWidth;
+  canvas.height = cameraVideo.videoHeight;
+  
+  ctx.drawImage(cameraVideo, 0, 0);
+  
+  // Store original captured image
+  const originalImage = canvas.toDataURL('image/jpeg', 0.9);
+  capturedImage = originalImage;
+  
+  // Stop camera stream
+  if (currentStream) {
+    currentStream.getTracks().forEach(track => track.stop());
+    currentStream = null;
+  }
+  
+  cameraVideo.style.display = 'none';
+  previewImage.style.display = 'block';
+  applyFilter(); // Apply current filter
+  
+  captureBtn.style.display = 'none';
+  retakeBtn.style.display = 'block';
+  sendPhotoBtn.style.display = 'block';
+});
+
+// Retake photo
+retakeBtn.addEventListener('click', () => {
+  capturedImage = null;
+  navigator.mediaDevices.getUserMedia({ 
+    video: { 
+      facingMode: 'user',
+      width: { ideal: 640 },
+      height: { ideal: 480 }
+    } 
+  })
+  .then(stream => {
+    currentStream = stream;
+    cameraVideo.srcObject = stream;
+    cameraVideo.style.display = 'block';
+    previewImage.style.display = 'none';
+    captureBtn.style.display = 'block';
+    retakeBtn.style.display = 'none';
+    sendPhotoBtn.style.display = 'none';
+  });
+});
+
+// Send photo
+sendPhotoBtn.addEventListener('click', () => {
+  if (previewImage.src) {
+    // Send the currently displayed image (with any applied filter)
+    socket.emit('chatMessage', { 
+      message: '', 
+      image: previewImage.src 
+    });
+    closeCameraModal();
+    messageInput.focus();
+  }
+});
+
 // Socket event listeners
 socket.on('welcome', (data) => {
   addMessage('system', data.username, data.message, data.color);
 });
 
 socket.on('chatMessage', (data) => {
-  addMessage('user', data.username, data.message, data.color, data.timestamp);
+  if (data.image) {
+    addImageMessage(data.username, data.image, data.color, data.timestamp);
+  } else {
+    addMessage('user', data.username, data.message, data.color, data.timestamp);
+  }
 });
 
 socket.on('userJoined', (data) => {
@@ -120,7 +337,7 @@ socket.on('emojiReaction', (data) => {
     reaction.className = 'emoji-reaction';
     reaction.textContent = data.emoji;
     reaction.title = `${data.username} reacted`;
-    lastMessage.querySelector('.message-text').appendChild(reaction);
+    lastMessage.querySelector('.message-text')?.appendChild(reaction);
   }
 });
 
@@ -155,7 +372,31 @@ function addMessage(type, username, message, color, timestamp) {
   chatMessages.scrollTop = chatMessages.scrollHeight;
 
   // Add animation
-  messageDiv.style.animation = 'fadeIn 0.3s ease';
+  messageDiv.style.animation = 'messageSlideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)';
+}
+
+// Add image message to chat
+function addImageMessage(username, imageSrc, color, timestamp) {
+  const messageDiv = document.createElement('div');
+  messageDiv.className = 'message';
+  
+  messageDiv.innerHTML = `
+    <div class="message-content">
+      <div style="flex: 1;">
+        <div class="message-username" style="color: ${color || '#667eea'}">
+          ${username}
+        </div>
+        <div class="message-text image-message">
+          <img src="${imageSrc}" alt="Photo from ${username}" class="chat-image">
+          ${timestamp ? `<div class="message-time">${timestamp}</div>` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+
+  chatMessages.appendChild(messageDiv);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+  messageDiv.style.animation = 'messageSlideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)';
 }
 
 // Escape HTML to prevent XSS

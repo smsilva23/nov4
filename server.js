@@ -71,12 +71,23 @@ io.on('connection', (socket) => {
   socket.on('chatMessage', (data) => {
     const user = users.get(socket.id);
     if (user) {
+      // Check if it's an image message
+      if (data.image) {
+        io.emit('chatMessage', {
+          username: user.username,
+          color: user.color,
+          image: data.image,
+          timestamp: new Date().toLocaleTimeString()
+        });
+        return;
+      }
+      
       // Check for fun commands
       let message = data.message;
       
-      if (message.startsWith('/')) {
+      if (message && message.startsWith('/')) {
         handleCommand(socket, message, user);
-      } else {
+      } else if (message) {
         io.emit('chatMessage', {
           username: user.username,
           color: user.color,
