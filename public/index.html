@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>✨ Fun Chat Server</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="chat-container">
+    <div class="chat-header">
+      <h1>✨ Fun Chat Server</h1>
+      <div class="online-users">
+        <span id="userCount">0</span> online
+      </div>
+    </div>
+
+    <div class="username-modal" id="usernameModal">
+      <div class="modal-content">
+        <h2>🎉 Welcome to Fun Chat!</h2>
+        <p>Enter your username (or leave blank for a fun random one):</p>
+        <input type="text" id="usernameInput" placeholder="Your awesome name..." maxlength="20" autofocus>
+        <button id="joinButton">Join Chat 🚀</button>
+      </div>
+    </div>
+
+    <div class="chat-messages" id="chatMessages"></div>
+    
+    <div class="typing-indicator" id="typingIndicator"></div>
+
+    <div class="chat-input-container">
+      <div class="emoji-picker-container">
+        <button class="emoji-btn" id="emojiBtn">😀</button>
+        <div class="emoji-picker" id="emojiPicker">
+          <span class="emoji">😀</span>
+          <span class="emoji">😂</span>
+          <span class="emoji">🤣</span>
+          <span class="emoji">😍</span>
+          <span class="emoji">🥰</span>
+          <span class="emoji">😎</span>
+          <span class="emoji">🤔</span>
+          <span class="emoji">😴</span>
+          <span class="emoji">🔥</span>
+          <span class="emoji">💯</span>
+          <span class="emoji">✨</span>
+          <span class="emoji">🎉</span>
+          <span class="emoji">🚀</span>
+          <span class="emoji">💪</span>
+          <span class="emoji">❤️</span>
+          <span class="emoji">👍</span>
+          <span class="emoji">👏</span>
+          <span class="emoji">🙌</span>
+          <span class="emoji">🎮</span>
+          <span class="emoji">🎯</span>
+        </div>
+      </div>
+      <input type="text" id="messageInput" placeholder="Type a message... (try /help for commands!)" maxlength="500">
+      <button id="sendButton">Send 🚀</button>
+    </div>
+
+    <div class="users-sidebar" id="usersSidebar">
+      <h3>👥 Online Users</h3>
+      <ul id="usersList"></ul>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
