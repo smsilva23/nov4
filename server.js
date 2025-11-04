@@ -138,7 +138,22 @@ function handleCommand(socket, message, user) {
         "How do you comfort a JavaScript bug? You console it! 😄",
         "Why did the developer go broke? Because he used up all his cache! 💸",
         "What's a programmer's favorite hangout place? Foo Bar! 🍺",
-        "Why do Java developers wear glasses? Because they can't C#! 👓"
+        "Why do Java developers wear glasses? Because they can't C#! 👓",
+        "How many programmers does it take to change a light bulb? None, that's a hardware problem! 💡",
+        "Why did the programmer quit his job? He didn't get arrays! 😂",
+        "A SQL query walks into a bar, walks up to two tables and asks: 'Can I join you?' 🍻",
+        "Why do programmers prefer dark mode? Because light attracts bugs! 🐛",
+        "What's the object-oriented way to become wealthy? Inheritance! 💰",
+        "Why did the programmer get stuck in the shower? The instructions on the shampoo bottle said: Lather, Rinse, Repeat! 🔁",
+        "How do you tell an introverted computer scientist from an extroverted one? The extroverted one looks at YOUR shoes when talking! 👟",
+        "Why don't programmers like to go outside? The sun gives them compiler errors! ☀️",
+        "What do you call a programmer from Finland? Nerdic! 🇫🇮",
+        "Why did the React component feel lonely? Because it didn't know what state it was in! ⚛️",
+        "How do you generate a random string? Put a web developer in front of Vim and tell them to exit! ⌨️",
+        "Why did the developer break up with GitHub? Too many commits! 💔",
+        "What's a programmer's favorite snack? Cookies! 🍪",
+        "Why do Python programmers prefer dark chocolate? Because they can't stand white space! 🐍",
+        "How do you know if a programmer is an extrovert? They look at YOUR shoes when talking to you! 👀"
       ];
       const joke = jokes[Math.floor(Math.random() * jokes.length)];
       io.emit('chatMessage', {
