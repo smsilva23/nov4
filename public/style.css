@@ -1054,6 +1054,23 @@ body::before {
   transform: translateY(-2px);
 }
 
+.delete-btn {
+  background: rgba(255, 0, 110, 0.1) !important;
+  border-color: var(--neon-pink) !important;
+  color: var(--neon-pink) !important;
+}
+
+.delete-btn:hover:not(:disabled) {
+  background: rgba(255, 0, 110, 0.2) !important;
+  box-shadow: 0 0 15px rgba(255, 0, 110, 0.5) !important;
+  transform: translateY(-2px);
+}
+
+.delete-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .page-info {
   color: rgba(255, 255, 255, 0.8);
   font-size: 14px;

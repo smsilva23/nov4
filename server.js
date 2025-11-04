@@ -166,6 +166,20 @@ io.on('connection', (socket) => {
     io.emit('flipbook:addPage', data);
   });
 
+  // Handle deleting a page
+  socket.on('flipbook:deletePage', (data) => {
+    if (flipbookState.pages.length > 1) {
+      if (data.pageIndex < flipbookState.pages.length) {
+        flipbookState.pages.splice(data.pageIndex, 1);
+      }
+      flipbookState.pages.length = data.totalPages;
+      if (flipbookState.currentPage >= flipbookState.pages.length) {
+        flipbookState.currentPage = flipbookState.pages.length - 1;
+      }
+      io.emit('flipbook:deletePage', data);
+    }
+  });
+
   // Handle disconnection
   socket.on('disconnect', () => {
     const user = users.get(socket.id);

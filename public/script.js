@@ -58,6 +58,7 @@ const toolButtons = document.querySelectorAll('.tool-btn');
 const prevPageBtn = document.getElementById('prevPage');
 const nextPageBtn = document.getElementById('nextPage');
 const addPageBtn = document.getElementById('addPage');
+const deletePageBtn = document.getElementById('deletePage');
 const pageInfo = document.getElementById('pageInfo');
 const playBtn = document.getElementById('playBtn');
 const onionskinToggle = document.getElementById('onionskinToggle');
@@ -467,12 +468,15 @@ function initFlipbook() {
     currentPage = 0;
   }
   
-  // Initialize first page if empty
-  if (!pages[0]) {
-    pages[0] = flipbookCanvas.toDataURL();
+  resizeCanvas();
+  
+  // Initialize current page if empty - clear canvas first
+  flipbookCtx.fillStyle = 'white';
+  flipbookCtx.fillRect(0, 0, flipbookCanvas.width, flipbookCanvas.height);
+  if (!pages[currentPage]) {
+    pages[currentPage] = flipbookCanvas.toDataURL();
   }
   
-  resizeCanvas();
   loadPage(currentPage);
   updatePageInfo();
   
@@ -609,12 +613,14 @@ function draw(e) {
 function stopDrawing() {
   if (isDrawing) {
     isDrawing = false;
+    savePage(currentPage); // Save before emitting
     socket.emit('flipbook:drawEnd', { page: currentPage });
-    savePage(currentPage);
     
     // Redraw with onionskin if enabled after drawing stops
     if (onionskinEnabled) {
-      renderCanvas();
+      setTimeout(() => {
+        renderCanvas();
+      }, 50);
     }
   }
 }
@@ -774,6 +780,7 @@ function updatePageInfo() {
   pageInfo.textContent = `Page ${currentPage + 1} / ${pages.length}`;
   prevPageBtn.disabled = currentPage === 0;
   nextPageBtn.disabled = currentPage === pages.length - 1;
+  deletePageBtn.disabled = pages.length <= 1; // Can't delete last page
 }
 
 function addPage() {
@@ -781,8 +788,16 @@ function addPage() {
     stopAnimation();
   }
   savePage(currentPage);
+  
+  // Initialize new page with white background
   pages.push(null);
   currentPage = pages.length - 1;
+  
+  // Clear canvas and initialize new page
+  flipbookCtx.fillStyle = 'white';
+  flipbookCtx.fillRect(0, 0, flipbookCanvas.width, flipbookCanvas.height);
+  pages[currentPage] = flipbookCanvas.toDataURL();
+  
   loadPage(currentPage);
   socket.emit('flipbook:addPage', { totalPages: pages.length });
 }
@@ -810,6 +825,40 @@ nextPageBtn.addEventListener('click', () => {
 });
 
 addPageBtn.addEventListener('click', addPage);
+
+deletePageBtn.addEventListener('click', () => {
+  if (pages.length <= 1) {
+    alert('Cannot delete the last page!');
+    return;
+  }
+  
+  if (isPlaying) {
+    stopAnimation();
+  }
+  
+  // Save current page before deleting
+  savePage(currentPage);
+  
+  // Store the page index being deleted
+  const deletedPageIndex = currentPage;
+  
+  // Remove the current page
+  pages.splice(currentPage, 1);
+  
+  // Adjust current page index if needed
+  if (currentPage >= pages.length) {
+    currentPage = pages.length - 1;
+  }
+  
+  // Load the new current page
+  loadPage(currentPage);
+  
+  // Sync with server and other clients (use the deleted index, not the new current)
+  socket.emit('flipbook:deletePage', { 
+    pageIndex: deletedPageIndex,
+    totalPages: pages.length 
+  });
+});
 
 // Animation playback
 function toggleAnimation() {
@@ -887,6 +936,16 @@ socket.on('flipbook:draw', (data) => {
   }
 });
 
+socket.on('flipbook:drawEnd', (data) => {
+  // Another user finished drawing - save and refresh the page to persist changes
+  if (data.page === currentPage) {
+    setTimeout(() => {
+      savePage(currentPage);
+      renderCanvas(); // Re-render to show updated state with onionskin if enabled
+    }, 50);
+  }
+});
+
 socket.on('flipbook:changePage', (data) => {
   // Another user changed pages - sync if needed
   if (data.page !== currentPage) {
@@ -902,4 +961,29 @@ socket.on('flipbook:addPage', (data) => {
     pages.push(null);
   }
   updatePageInfo();
+});
+
+socket.on('flipbook:deletePage', (data) => {
+  // Another user deleted a page
+  if (pages.length > 1) {
+    // Save current page before deletion
+    savePage(currentPage);
+    
+    // Adjust pages array
+    if (data.pageIndex < pages.length) {
+      pages.splice(data.pageIndex, 1);
+    } else {
+      // If the deleted page index is out of bounds, just adjust length
+      pages.length = data.totalPages;
+    }
+    
+    // Adjust current page if needed
+    if (currentPage >= pages.length) {
+      currentPage = pages.length - 1;
+    }
+    
+    // Reload current page
+    loadPage(currentPage);
+    updatePageInfo();
+  }
 });
