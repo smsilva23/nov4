@@ -16,6 +16,11 @@ let pages = []; // Store canvas data for each page
 let currentPage = 0;
 let lastX = 0;
 let lastY = 0;
+let onionskinEnabled = false;
+let onionskinOpacity = 30;
+let isPlaying = false;
+let animationInterval = null;
+let animationSpeed = 500; // milliseconds per frame
 
 // DOM elements
 const usernameModal = document.getElementById('usernameModal');
@@ -54,6 +59,10 @@ const prevPageBtn = document.getElementById('prevPage');
 const nextPageBtn = document.getElementById('nextPage');
 const addPageBtn = document.getElementById('addPage');
 const pageInfo = document.getElementById('pageInfo');
+const playBtn = document.getElementById('playBtn');
+const onionskinToggle = document.getElementById('onionskinToggle');
+const onionskinOpacityInput = document.getElementById('onionskinOpacity');
+const onionskinOpacityLabel = document.getElementById('onionskinOpacityLabel');
 
 // Initialize canvas when DOM is ready
 function initFlipbookCanvas() {
@@ -457,9 +466,19 @@ function initFlipbook() {
     pages.push(null); // First page
     currentPage = 0;
   }
+  
+  // Initialize first page if empty
+  if (!pages[0]) {
+    pages[0] = flipbookCanvas.toDataURL();
+  }
+  
   resizeCanvas();
   loadPage(currentPage);
   updatePageInfo();
+  
+  // Reset onionskin state
+  onionskinEnabled = false;
+  onionskinToggle.classList.remove('active');
 }
 
 // Resize canvas to fit container
@@ -492,6 +511,9 @@ flipbookBtn.addEventListener('click', () => {
 
 // Close flipbook modal
 closeFlipbook.addEventListener('click', () => {
+  if (isPlaying) {
+    stopAnimation();
+  }
   flipbookModal.classList.remove('show');
 });
 
@@ -515,6 +537,25 @@ brushSizeInput.addEventListener('input', (e) => {
   brushSize = parseInt(e.target.value);
   brushSizeLabel.textContent = `${brushSize}px`;
 });
+
+// Onionskin toggle
+onionskinToggle.addEventListener('click', () => {
+  onionskinEnabled = !onionskinEnabled;
+  onionskinToggle.classList.toggle('active', onionskinEnabled);
+  renderCanvas(); // Redraw with onionskin
+});
+
+// Onionskin opacity
+onionskinOpacityInput.addEventListener('input', (e) => {
+  onionskinOpacity = parseInt(e.target.value);
+  onionskinOpacityLabel.textContent = `${onionskinOpacity}%`;
+  if (onionskinEnabled) {
+    renderCanvas(); // Redraw with new opacity
+  }
+});
+
+// Play button
+playBtn.addEventListener('click', toggleAnimation);
 
 // Drawing functions
 function getMousePos(e) {
@@ -570,10 +611,23 @@ function stopDrawing() {
     isDrawing = false;
     socket.emit('flipbook:drawEnd', { page: currentPage });
     savePage(currentPage);
+    
+    // Update onionskin display if enabled
+    if (onionskinEnabled) {
+      setTimeout(() => {
+        renderCanvas();
+      }, 50);
+    }
   }
 }
 
 function drawLine(fromX, fromY, toX, toY, color, size, tool = null) {
+  // Stop animation if playing while drawing
+  if (isPlaying) {
+    stopAnimation();
+  }
+  
+  flipbookCtx.globalAlpha = 1.0; // Reset alpha for drawing
   flipbookCtx.beginPath();
   flipbookCtx.moveTo(fromX, fromY);
   flipbookCtx.lineTo(toX, toY);
@@ -590,6 +644,15 @@ function drawLine(fromX, fromY, toX, toY, color, size, tool = null) {
   }
   
   flipbookCtx.stroke();
+  
+  // Redraw onionskin after drawing
+  if (onionskinEnabled) {
+    setTimeout(() => {
+      const currentPageData = flipbookCanvas.toDataURL();
+      pages[currentPage] = currentPageData;
+      renderCanvas();
+    }, 0);
+  }
 }
 
 // Canvas event listeners (attached when flipbook opens)
@@ -637,21 +700,65 @@ function savePage(pageIndex) {
 function loadPage(pageIndex) {
   if (pageIndex < 0 || pageIndex >= pages.length) return;
   
+  currentPage = pageIndex;
+  updatePageInfo();
+  renderCanvas();
+}
+
+function renderCanvas() {
+  if (!flipbookCanvas || !flipbookCtx) return;
+  
   // Clear canvas
   flipbookCtx.fillStyle = 'white';
   flipbookCtx.fillRect(0, 0, flipbookCanvas.width, flipbookCanvas.height);
   
-  // Load saved page data
-  if (pages[pageIndex]) {
-    const img = new Image();
-    img.onload = () => {
-      flipbookCtx.drawImage(img, 0, 0);
-    };
-    img.src = pages[pageIndex];
+  // Draw onionskin layers if enabled
+  if (onionskinEnabled && !isPlaying) {
+    // Draw previous page (if exists) with cyan tint
+    if (currentPage > 0 && pages[currentPage - 1]) {
+      drawOnionskinLayer(pages[currentPage - 1], onionskinOpacity, '#00f3ff');
+    }
+    
+    // Draw next page (if exists) with pink tint
+    if (currentPage < pages.length - 1 && pages[currentPage + 1]) {
+      drawOnionskinLayer(pages[currentPage + 1], onionskinOpacity, '#ff006e');
+    }
   }
   
-  currentPage = pageIndex;
-  updatePageInfo();
+  // Draw current page
+  if (pages[currentPage]) {
+    const img = new Image();
+    img.onload = () => {
+      flipbookCtx.save();
+      flipbookCtx.globalAlpha = 1.0;
+      flipbookCtx.globalCompositeOperation = 'source-over';
+      flipbookCtx.drawImage(img, 0, 0);
+      flipbookCtx.restore();
+    };
+    img.src = pages[currentPage];
+  }
+}
+
+function drawOnionskinLayer(pageData, opacity, tintColor) {
+  const img = new Image();
+  img.onload = () => {
+    flipbookCtx.save();
+    
+    // Draw the image with reduced opacity
+    flipbookCtx.globalAlpha = opacity / 100;
+    flipbookCtx.globalCompositeOperation = 'source-over';
+    flipbookCtx.drawImage(img, 0, 0);
+    
+    // Apply a subtle tint overlay to differentiate prev/next pages
+    if (tintColor) {
+      flipbookCtx.globalCompositeOperation = 'source-atop';
+      flipbookCtx.fillStyle = tintColor;
+      flipbookCtx.fillRect(0, 0, flipbookCanvas.width, flipbookCanvas.height);
+    }
+    
+    flipbookCtx.restore();
+  };
+  img.src = pageData;
 }
 
 function updatePageInfo() {
@@ -661,6 +768,9 @@ function updatePageInfo() {
 }
 
 function addPage() {
+  if (isPlaying) {
+    stopAnimation();
+  }
   savePage(currentPage);
   pages.push(null);
   currentPage = pages.length - 1;
@@ -669,6 +779,9 @@ function addPage() {
 }
 
 prevPageBtn.addEventListener('click', () => {
+  if (isPlaying) {
+    stopAnimation();
+  }
   if (currentPage > 0) {
     savePage(currentPage);
     loadPage(currentPage - 1);
@@ -677,6 +790,9 @@ prevPageBtn.addEventListener('click', () => {
 });
 
 nextPageBtn.addEventListener('click', () => {
+  if (isPlaying) {
+    stopAnimation();
+  }
   if (currentPage < pages.length - 1) {
     savePage(currentPage);
     loadPage(currentPage + 1);
@@ -685,6 +801,60 @@ nextPageBtn.addEventListener('click', () => {
 });
 
 addPageBtn.addEventListener('click', addPage);
+
+// Animation playback
+function toggleAnimation() {
+  if (isPlaying) {
+    stopAnimation();
+  } else {
+    startAnimation();
+  }
+}
+
+function startAnimation() {
+  if (pages.length < 2) {
+    alert('You need at least 2 pages to play an animation!');
+    return;
+  }
+  
+  isPlaying = true;
+  playBtn.textContent = '⏸️';
+  playBtn.title = 'Pause Animation';
+  
+  // Disable drawing and page navigation while playing
+  flipbookCanvas.style.pointerEvents = 'none';
+  prevPageBtn.disabled = true;
+  nextPageBtn.disabled = true;
+  addPageBtn.disabled = true;
+  
+  let animationPage = currentPage;
+  savePage(currentPage); // Save current page before starting
+  
+  animationInterval = setInterval(() => {
+    // Switch to next page
+    animationPage = (animationPage + 1) % pages.length;
+    currentPage = animationPage;
+    renderCanvas();
+    updatePageInfo();
+  }, animationSpeed);
+}
+
+function stopAnimation() {
+  isPlaying = false;
+  playBtn.textContent = '▶️';
+  playBtn.title = 'Play Animation';
+  
+  // Re-enable drawing and navigation
+  flipbookCanvas.style.pointerEvents = 'auto';
+  prevPageBtn.disabled = currentPage === 0;
+  nextPageBtn.disabled = currentPage === pages.length - 1;
+  addPageBtn.disabled = false;
+  
+  if (animationInterval) {
+    clearInterval(animationInterval);
+    animationInterval = null;
+  }
+}
 
 // Socket events for collaborative drawing
 socket.on('flipbook:state', (data) => {
