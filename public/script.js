@@ -612,11 +612,9 @@ function stopDrawing() {
     socket.emit('flipbook:drawEnd', { page: currentPage });
     savePage(currentPage);
     
-    // Update onionskin display if enabled
+    // Redraw with onionskin if enabled after drawing stops
     if (onionskinEnabled) {
-      setTimeout(() => {
-        renderCanvas();
-      }, 50);
+      renderCanvas();
     }
   }
 }
@@ -645,14 +643,6 @@ function drawLine(fromX, fromY, toX, toY, color, size, tool = null) {
   
   flipbookCtx.stroke();
   
-  // Redraw onionskin after drawing
-  if (onionskinEnabled) {
-    setTimeout(() => {
-      const currentPageData = flipbookCanvas.toDataURL();
-      pages[currentPage] = currentPageData;
-      renderCanvas();
-    }, 0);
-  }
 }
 
 // Canvas event listeners (attached when flipbook opens)
@@ -712,54 +702,73 @@ function renderCanvas() {
   flipbookCtx.fillStyle = 'white';
   flipbookCtx.fillRect(0, 0, flipbookCanvas.width, flipbookCanvas.height);
   
-  // Draw onionskin layers if enabled
+  // Draw onionskin layers if enabled (and not playing animation)
   if (onionskinEnabled && !isPlaying) {
-    // Draw previous page (if exists) with cyan tint
+    let onionskinLayers = 0;
+    let onionskinDrawn = 0;
+    
+    if (currentPage > 0 && pages[currentPage - 1]) onionskinLayers++;
+    if (currentPage < pages.length - 1 && pages[currentPage + 1]) onionskinLayers++;
+    
+    const drawOnionskinComplete = () => {
+      onionskinDrawn++;
+      if (onionskinDrawn >= onionskinLayers) {
+        drawCurrentPage();
+      }
+    };
+    
+    // Draw previous page (if exists)
     if (currentPage > 0 && pages[currentPage - 1]) {
-      drawOnionskinLayer(pages[currentPage - 1], onionskinOpacity, '#00f3ff');
+      const prevImg = new Image();
+      prevImg.onload = () => {
+        flipbookCtx.save();
+        flipbookCtx.globalAlpha = onionskinOpacity / 100;
+        flipbookCtx.globalCompositeOperation = 'source-over';
+        flipbookCtx.drawImage(prevImg, 0, 0);
+        flipbookCtx.restore();
+        drawOnionskinComplete();
+      };
+      prevImg.src = pages[currentPage - 1];
     }
     
-    // Draw next page (if exists) with pink tint
+    // Draw next page (if exists)
     if (currentPage < pages.length - 1 && pages[currentPage + 1]) {
-      drawOnionskinLayer(pages[currentPage + 1], onionskinOpacity, '#ff006e');
+      const nextImg = new Image();
+      nextImg.onload = () => {
+        flipbookCtx.save();
+        flipbookCtx.globalAlpha = onionskinOpacity / 100;
+        flipbookCtx.globalCompositeOperation = 'source-over';
+        flipbookCtx.drawImage(nextImg, 0, 0);
+        flipbookCtx.restore();
+        drawOnionskinComplete();
+      };
+      nextImg.src = pages[currentPage + 1];
     }
+    
+    // If no onionskin layers, draw current page immediately
+    if (onionskinLayers === 0) {
+      drawCurrentPage();
+    }
+  } else {
+    drawCurrentPage();
   }
   
-  // Draw current page
-  if (pages[currentPage]) {
-    const img = new Image();
-    img.onload = () => {
-      flipbookCtx.save();
-      flipbookCtx.globalAlpha = 1.0;
-      flipbookCtx.globalCompositeOperation = 'source-over';
-      flipbookCtx.drawImage(img, 0, 0);
-      flipbookCtx.restore();
-    };
-    img.src = pages[currentPage];
+  function drawCurrentPage() {
+    if (pages[currentPage]) {
+      const img = new Image();
+      img.onload = () => {
+        flipbookCtx.save();
+        flipbookCtx.globalAlpha = 1.0;
+        flipbookCtx.globalCompositeOperation = 'source-over';
+        flipbookCtx.drawImage(img, 0, 0);
+        flipbookCtx.restore();
+      };
+      img.src = pages[currentPage];
+    }
   }
 }
 
-function drawOnionskinLayer(pageData, opacity, tintColor) {
-  const img = new Image();
-  img.onload = () => {
-    flipbookCtx.save();
-    
-    // Draw the image with reduced opacity
-    flipbookCtx.globalAlpha = opacity / 100;
-    flipbookCtx.globalCompositeOperation = 'source-over';
-    flipbookCtx.drawImage(img, 0, 0);
-    
-    // Apply a subtle tint overlay to differentiate prev/next pages
-    if (tintColor) {
-      flipbookCtx.globalCompositeOperation = 'source-atop';
-      flipbookCtx.fillStyle = tintColor;
-      flipbookCtx.fillRect(0, 0, flipbookCanvas.width, flipbookCanvas.height);
-    }
-    
-    flipbookCtx.restore();
-  };
-  img.src = pageData;
-}
+
 
 function updatePageInfo() {
   pageInfo.textContent = `Page ${currentPage + 1} / ${pages.length}`;
