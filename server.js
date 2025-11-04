@@ -13,6 +13,12 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Store connected users
 const users = new Map();
 
+// Store flipbook state (shared across all users)
+const flipbookState = {
+  pages: [], // Array of page data (base64 images)
+  currentPage: 0
+};
+
 // Generate fun random colors for usernames
 const colors = [
   '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', 
@@ -120,6 +126,44 @@ io.on('connection', (socket) => {
         messageId: data.messageId
       });
     }
+  });
+
+  // ========== FLIPBOOK HANDLERS ==========
+  
+  // Get current flipbook state
+  socket.on('flipbook:getState', () => {
+    socket.emit('flipbook:state', {
+      pages: flipbookState.pages,
+      currentPage: flipbookState.currentPage
+    });
+  });
+
+  // Handle drawing start
+  socket.on('flipbook:drawStart', (data) => {
+    socket.broadcast.emit('flipbook:drawStart', data);
+  });
+
+  // Handle drawing (while mouse is moving)
+  socket.on('flipbook:draw', (data) => {
+    socket.broadcast.emit('flipbook:draw', data);
+  });
+
+  // Handle drawing end
+  socket.on('flipbook:drawEnd', (data) => {
+    socket.broadcast.emit('flipbook:drawEnd', data);
+  });
+
+  // Handle page change
+  socket.on('flipbook:changePage', (data) => {
+    flipbookState.currentPage = data.page;
+    socket.broadcast.emit('flipbook:changePage', data);
+  });
+
+  // Handle adding a new page
+  socket.on('flipbook:addPage', (data) => {
+    flipbookState.pages.length = data.totalPages;
+    flipbookState.currentPage = data.totalPages - 1;
+    io.emit('flipbook:addPage', data);
   });
 
   // Handle disconnection

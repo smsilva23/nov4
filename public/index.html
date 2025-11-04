@@ -55,6 +55,7 @@
         </div>
       </div>
       <button class="camera-btn" id="cameraBtn" title="Take a photo 📸">📸</button>
+      <button class="flipbook-btn" id="flipbookBtn" title="Open collaborative flipbook 📖">📖</button>
       <input type="text" id="messageInput" placeholder="Type a message... (try /help for commands!)" maxlength="500">
       <button id="sendButton">Send 🚀</button>
     </div>
@@ -92,6 +93,35 @@
     <div class="users-sidebar" id="usersSidebar">
       <h3>👥 Online Users</h3>
       <ul id="usersList"></ul>
+    </div>
+
+    <!-- Flipbook Modal -->
+    <div class="flipbook-modal" id="flipbookModal">
+      <div class="flipbook-modal-content">
+        <div class="flipbook-header">
+          <h3>📖 Collaborative Flipbook</h3>
+          <button class="close-flipbook" id="closeFlipbook">✕</button>
+        </div>
+        <div class="flipbook-toolbar">
+          <div class="tool-group">
+            <button class="tool-btn active" data-tool="brush" title="Brush ✏️">✏️</button>
+            <button class="tool-btn" data-tool="eraser" title="Eraser 🧹">🧹</button>
+            <input type="color" id="colorPicker" value="#00f3ff" title="Color">
+            <input type="range" id="brushSize" min="1" max="50" value="5" title="Brush Size">
+            <span class="brush-size-label" id="brushSizeLabel">5px</span>
+          </div>
+          <div class="page-controls">
+            <button class="page-btn" id="prevPage" title="Previous Page">◀</button>
+            <span class="page-info" id="pageInfo">Page 1 / 1</span>
+            <button class="page-btn" id="nextPage" title="Next Page">▶</button>
+            <button class="page-btn" id="addPage" title="Add New Page">+</button>
+          </div>
+        </div>
+        <div class="flipbook-canvas-container">
+          <canvas id="flipbookCanvas"></canvas>
+          <div class="canvas-overlay" id="canvasOverlay"></div>
+        </div>
+      </div>
     </div>
   </div>
 

@@ -5,6 +5,18 @@ let currentStream = null;
 let currentFilter = 'none';
 let capturedImage = null;
 
+// Flipbook variables
+let flipbookCanvas = null;
+let flipbookCtx = null;
+let isDrawing = false;
+let currentTool = 'brush';
+let currentColor = '#00f3ff';
+let brushSize = 5;
+let pages = []; // Store canvas data for each page
+let currentPage = 0;
+let lastX = 0;
+let lastY = 0;
+
 // DOM elements
 const usernameModal = document.getElementById('usernameModal');
 const usernameInput = document.getElementById('usernameInput');
@@ -29,6 +41,27 @@ const captureBtn = document.getElementById('captureBtn');
 const retakeBtn = document.getElementById('retakeBtn');
 const sendPhotoBtn = document.getElementById('sendPhotoBtn');
 const filterButtons = document.querySelectorAll('.filter-btn');
+
+// Flipbook elements
+const flipbookBtn = document.getElementById('flipbookBtn');
+const flipbookModal = document.getElementById('flipbookModal');
+const closeFlipbook = document.getElementById('closeFlipbook');
+const colorPicker = document.getElementById('colorPicker');
+const brushSizeInput = document.getElementById('brushSize');
+const brushSizeLabel = document.getElementById('brushSizeLabel');
+const toolButtons = document.querySelectorAll('.tool-btn');
+const prevPageBtn = document.getElementById('prevPage');
+const nextPageBtn = document.getElementById('nextPage');
+const addPageBtn = document.getElementById('addPage');
+const pageInfo = document.getElementById('pageInfo');
+
+// Initialize canvas when DOM is ready
+function initFlipbookCanvas() {
+  flipbookCanvas = document.getElementById('flipbookCanvas');
+  if (flipbookCanvas) {
+    flipbookCtx = flipbookCanvas.getContext('2d');
+  }
+}
 
 // Join chat
 joinButton.addEventListener('click', () => {
@@ -412,3 +445,282 @@ if (window.innerWidth <= 768) {
     document.getElementById('usersSidebar').classList.toggle('show');
   });
 }
+
+// ========== FLIPBOOK FUNCTIONALITY ==========
+
+// Initialize flipbook
+function initFlipbook() {
+  initFlipbookCanvas();
+  if (!flipbookCanvas || !flipbookCtx) return;
+  
+  if (pages.length === 0) {
+    pages.push(null); // First page
+    currentPage = 0;
+  }
+  resizeCanvas();
+  loadPage(currentPage);
+  updatePageInfo();
+}
+
+// Resize canvas to fit container
+function resizeCanvas() {
+  const container = flipbookCanvas.parentElement;
+  const maxWidth = container.clientWidth - 40;
+  const maxHeight = container.clientHeight - 40;
+  
+  flipbookCanvas.width = Math.min(maxWidth, 800);
+  flipbookCanvas.height = Math.min(maxHeight, 600);
+  
+  // Redraw current page after resize
+  loadPage(currentPage);
+}
+
+window.addEventListener('resize', () => {
+  if (flipbookModal.classList.contains('show')) {
+    resizeCanvas();
+  }
+});
+
+// Open flipbook modal
+flipbookBtn.addEventListener('click', () => {
+  flipbookModal.classList.add('show');
+  initFlipbook();
+  attachCanvasListeners();
+  // Request current state from server
+  socket.emit('flipbook:getState');
+});
+
+// Close flipbook modal
+closeFlipbook.addEventListener('click', () => {
+  flipbookModal.classList.remove('show');
+});
+
+// Tool selection
+toolButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    toolButtons.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentTool = btn.dataset.tool;
+    flipbookCanvas.style.cursor = currentTool === 'eraser' ? 'grab' : 'crosshair';
+  });
+});
+
+// Color picker
+colorPicker.addEventListener('change', (e) => {
+  currentColor = e.target.value;
+});
+
+// Brush size
+brushSizeInput.addEventListener('input', (e) => {
+  brushSize = parseInt(e.target.value);
+  brushSizeLabel.textContent = `${brushSize}px`;
+});
+
+// Drawing functions
+function getMousePos(e) {
+  const rect = flipbookCanvas.getBoundingClientRect();
+  return {
+    x: e.clientX - rect.left,
+    y: e.clientY - rect.top
+  };
+}
+
+function startDrawing(e) {
+  isDrawing = true;
+  const pos = getMousePos(e);
+  lastX = pos.x;
+  lastY = pos.y;
+  
+  socket.emit('flipbook:drawStart', {
+    page: currentPage,
+    x: lastX,
+    y: lastY,
+    tool: currentTool,
+    color: currentTool === 'eraser' ? '#ffffff' : currentColor,
+    size: brushSize
+  });
+}
+
+function draw(e) {
+  if (!isDrawing) return;
+  
+  const pos = getMousePos(e);
+  
+  // Draw locally
+  drawLine(lastX, lastY, pos.x, pos.y, currentTool === 'eraser' ? '#ffffff' : currentColor, brushSize);
+  
+  // Send to server
+  socket.emit('flipbook:draw', {
+    page: currentPage,
+    fromX: lastX,
+    fromY: lastY,
+    toX: pos.x,
+    toY: pos.y,
+    tool: currentTool,
+    color: currentTool === 'eraser' ? '#ffffff' : currentColor,
+    size: brushSize
+  });
+  
+  lastX = pos.x;
+  lastY = pos.y;
+}
+
+function stopDrawing() {
+  if (isDrawing) {
+    isDrawing = false;
+    socket.emit('flipbook:drawEnd', { page: currentPage });
+    savePage(currentPage);
+  }
+}
+
+function drawLine(fromX, fromY, toX, toY, color, size, tool = null) {
+  flipbookCtx.beginPath();
+  flipbookCtx.moveTo(fromX, fromY);
+  flipbookCtx.lineTo(toX, toY);
+  flipbookCtx.strokeStyle = color;
+  flipbookCtx.lineWidth = size;
+  flipbookCtx.lineCap = 'round';
+  flipbookCtx.lineJoin = 'round';
+  
+  const useTool = tool || currentTool;
+  if (useTool === 'eraser' || color === '#ffffff') {
+    flipbookCtx.globalCompositeOperation = 'destination-out';
+  } else {
+    flipbookCtx.globalCompositeOperation = 'source-over';
+  }
+  
+  flipbookCtx.stroke();
+}
+
+// Canvas event listeners (attached when flipbook opens)
+function attachCanvasListeners() {
+  if (!flipbookCanvas) return;
+  
+  flipbookCanvas.addEventListener('mousedown', startDrawing);
+  flipbookCanvas.addEventListener('mousemove', draw);
+  flipbookCanvas.addEventListener('mouseup', stopDrawing);
+  flipbookCanvas.addEventListener('mouseout', stopDrawing);
+
+  // Touch events for mobile
+  flipbookCanvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const mouseEvent = new MouseEvent('mousedown', {
+      clientX: touch.clientX,
+      clientY: touch.clientY
+    });
+    flipbookCanvas.dispatchEvent(mouseEvent);
+  });
+
+  flipbookCanvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const mouseEvent = new MouseEvent('mousemove', {
+      clientX: touch.clientX,
+      clientY: touch.clientY
+    });
+    flipbookCanvas.dispatchEvent(mouseEvent);
+  });
+
+  flipbookCanvas.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    const mouseEvent = new MouseEvent('mouseup', {});
+    flipbookCanvas.dispatchEvent(mouseEvent);
+  });
+}
+
+// Page management
+function savePage(pageIndex) {
+  pages[pageIndex] = flipbookCanvas.toDataURL();
+}
+
+function loadPage(pageIndex) {
+  if (pageIndex < 0 || pageIndex >= pages.length) return;
+  
+  // Clear canvas
+  flipbookCtx.fillStyle = 'white';
+  flipbookCtx.fillRect(0, 0, flipbookCanvas.width, flipbookCanvas.height);
+  
+  // Load saved page data
+  if (pages[pageIndex]) {
+    const img = new Image();
+    img.onload = () => {
+      flipbookCtx.drawImage(img, 0, 0);
+    };
+    img.src = pages[pageIndex];
+  }
+  
+  currentPage = pageIndex;
+  updatePageInfo();
+}
+
+function updatePageInfo() {
+  pageInfo.textContent = `Page ${currentPage + 1} / ${pages.length}`;
+  prevPageBtn.disabled = currentPage === 0;
+  nextPageBtn.disabled = currentPage === pages.length - 1;
+}
+
+function addPage() {
+  savePage(currentPage);
+  pages.push(null);
+  currentPage = pages.length - 1;
+  loadPage(currentPage);
+  socket.emit('flipbook:addPage', { totalPages: pages.length });
+}
+
+prevPageBtn.addEventListener('click', () => {
+  if (currentPage > 0) {
+    savePage(currentPage);
+    loadPage(currentPage - 1);
+    socket.emit('flipbook:changePage', { page: currentPage });
+  }
+});
+
+nextPageBtn.addEventListener('click', () => {
+  if (currentPage < pages.length - 1) {
+    savePage(currentPage);
+    loadPage(currentPage + 1);
+    socket.emit('flipbook:changePage', { page: currentPage });
+  }
+});
+
+addPageBtn.addEventListener('click', addPage);
+
+// Socket events for collaborative drawing
+socket.on('flipbook:state', (data) => {
+  if (data.pages && data.pages.length > 0) {
+    pages = data.pages;
+    currentPage = data.currentPage || 0;
+    loadPage(currentPage);
+  }
+});
+
+socket.on('flipbook:drawStart', (data) => {
+  if (data.page === currentPage) {
+    lastX = data.x;
+    lastY = data.y;
+  }
+});
+
+socket.on('flipbook:draw', (data) => {
+  if (data.page === currentPage) {
+    drawLine(data.fromX, data.fromY, data.toX, data.toY, data.color, data.size, data.tool);
+  }
+});
+
+socket.on('flipbook:changePage', (data) => {
+  // Another user changed pages - sync if needed
+  if (data.page !== currentPage) {
+    // Optionally sync to same page
+    // savePage(currentPage);
+    // loadPage(data.page);
+  }
+});
+
+socket.on('flipbook:addPage', (data) => {
+  // Another user added a page
+  while (pages.length < data.totalPages) {
+    pages.push(null);
+  }
+  updatePageInfo();
+});
